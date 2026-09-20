@@ -33,3 +33,4 @@ yarn-error.log*
 
 # local planning notes, not published
 prototype-notes.md
+.env*

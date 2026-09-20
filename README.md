@@ -40,9 +40,17 @@ CardView                        --POST--> /api/dig       same, scoped to one car
 - **Storage.** `src/lib/store.ts` keeps files in the browser's localStorage. It is the one module to replace when a database arrives.
 - **Prompts** live in `src/lib/prompts.ts`.
 
-## Before putting it on the internet
+## Deploying
 
-The API routes have no authentication or rate limiting, so anyone who can reach a deployment can spend your API key. Add auth (or at least a shared secret) before deploying publicly. Research requests run for one to three minutes; on Vercel the routes ask for `maxDuration = 300`, which needs a plan that allows it.
+Deployed on Vercel. The app itself still has **no authentication or rate limiting** in code: any request that reaches `/api/research` spends your API key, and each run is one long Claude request plus up to 8 web searches. Access is therefore controlled at the platform edge, not in the app.
+
+1. Import the repo at [vercel.com/new](https://vercel.com/new). Next.js 16 needs no build configuration.
+2. Set `ANTHROPIC_API_KEY` under **Settings -> Environment Variables**.
+3. Under **Settings -> Deployment Protection**, turn on **Vercel Authentication** and set the scope to **All Deployments**. The default scope, Standard Protection, deliberately leaves production public. Vercel Authentication at this scope is free on every plan; Password Protection is Pro-only.
+
+If you ever remove that protection, add auth and rate limiting to the routes first.
+
+Research requests run for one to three minutes, so the routes declare `maxDuration = 300`. Fluid compute makes 300s both the default and the maximum on Hobby, so the free tier is enough. The NDJSON stream emits a blank-line heartbeat every 15s, because a web-search turn can produce no output for a minute and idle connections get closed in transit.
 
 ## Roadmap
 
