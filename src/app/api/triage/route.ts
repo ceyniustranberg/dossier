@@ -1,10 +1,14 @@
 import { FAST_MODEL, friendly, getClient, noKey } from "@/lib/anthropic";
+import { guard } from "@/lib/auth";
 import { triagePrompt } from "@/lib/prompts";
 import type { TriageResult } from "@/lib/types";
 
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
+  const denied = await guard();
+  if (denied) return denied;
+
   const client = getClient();
   if (!client) return noKey();
   const body = await req.json().catch(() => null);

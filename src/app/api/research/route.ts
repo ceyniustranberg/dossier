@@ -1,10 +1,14 @@
 import { WEB_SEARCH, cardStream, getClient, ndjson, noKey } from "@/lib/anthropic";
+import { guard } from "@/lib/auth";
 import { researchPrompt } from "@/lib/prompts";
 
 export const maxDuration = 300;
 const SEARCHES = 8;
 
 export async function POST(req: Request) {
+  const denied = await guard();
+  if (denied) return denied;
+
   const client = getClient();
   if (!client) return noKey();
   const body = await req.json().catch(() => null);
