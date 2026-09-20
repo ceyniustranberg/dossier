@@ -4,7 +4,7 @@ Type a topic, get an in-depth research board.
 
 You enter a high-level query such as "flying cars". If the query is broad or ambiguous ("US"), the research desk asks which angle you want and offers tappable options. Claude then searches the web and lays out a dossier as cards on a Miro-like canvas: a central summary, clusters under folder tabs, and cards for findings, figures, timelines, players, real articles, debates, open questions and charts. Any card can be expanded with **Dig deeper**, which branches new cards from it.
 
-Status: prototype, single user, no accounts.
+Status: prototype. Sign-in is handled by Supabase; boards are still per-browser.
 
 ## Run it
 
@@ -22,6 +22,9 @@ npm run dev                  # http://localhost:3000
 | `DOSSIER_MODEL` | `claude-sonnet-5` | Writes the dossier |
 | `DOSSIER_FAST_MODEL` | `claude-haiku-4-5` | Intake triage (angle questions) |
 | `DOSSIER_WEB_SEARCH` | `on` | `off` writes from model knowledge only |
+| `NEXT_PUBLIC_SUPABASE_URL` | none | Turns auth on (with the key below) |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | none | Publishable key; `NEXT_PUBLIC_SUPABASE_ANON_KEY` also works |
+| `DOSSIER_ALLOWED_EMAILS` | none | Comma-separated allowlist. Empty means any signed-in user |
 
 Each dossier makes one long Claude request with up to 8 web searches; Dig deeper uses up to 3. Both are billed to your API key.
 
@@ -37,16 +40,32 @@ CardView                        --POST--> /api/dig       same, scoped to one car
 - **Streaming.** Claude is asked to write JSON Lines, one card per line. `src/lib/anthropic.ts` parses each line as it completes, validates it (`src/lib/cards.ts`) and forwards it to the browser as NDJSON, so cards land on the board while the rest is still being written. Web searches show up as status lines.
 - **No invented links.** The server records every URL the web search tool actually returned. A card's `url` or `sources` survive only if they are on that list; an article card without a real URL is downgraded to an unverified "coverage lead" that links to a news search instead.
 - **Layout.** `src/lib/layout.ts` is a pure function: measured card sizes in, positions out. Cards you drag are marked `moved` and never auto-placed again.
-- **Storage.** `src/lib/store.ts` keeps files in the browser's localStorage. It is the one module to replace when a database arrives.
+- **Storage.** `src/lib/store.ts` keeps files in the browser's localStorage. It is the one module to replace when a database arrives. Auth is in place, so the Supabase project is already there to put it behind.
 - **Prompts** live in `src/lib/prompts.ts`.
+
+## Auth
+
+Sign-in is a Supabase magic link: enter an email, click the link, land back signed in. There are no passwords to store and no sign-up form.
+
+Three env vars control it. With `NEXT_PUBLIC_SUPABASE_URL` and the publishable key set, auth is enforced. Without them the app runs unauthenticated in development — so `npm run dev` still works on a fresh clone — but **a production build refuses every API request** rather than silently shipping an open app.
+
+Set `DOSSIER_ALLOWED_EMAILS` to the addresses that may sign in. Without it, anyone who can create an account on your Supabase project can spend your Anthropic key. The allowlist is checked twice: before a link is mailed, and again when the link is redeemed.
+
+Deploying somewhere other than localhost means adding that origin under **Authentication → URL Configuration** in the Supabase dashboard, or the magic link will refuse to redirect back.
+
+- `src/proxy.ts` refreshes the session cookie and bounces signed-out visitors to `/login`. Next.js 16 renamed `middleware.ts` to `proxy.ts`; most Supabase guides still show the old name.
+- `src/lib/auth.ts` is the data access layer and the thing that actually enforces access. `verifySession()` calls `getUser()`, which revalidates the JWT — `getSession()` only reads the cookie and is not trustworthy on the server.
+- Every API route calls `guard()` before spending a token. API routes return a JSON `401` rather than redirecting, so `fetch` gets an error it can read instead of an HTML login page.
 
 ## Before putting it on the internet
 
-The API routes have no authentication or rate limiting, so anyone who can reach a deployment can spend your API key. Add auth (or at least a shared secret) before deploying publicly. Research requests run for one to three minutes; on Vercel the routes ask for `maxDuration = 300`, which needs a plan that allows it.
+Auth covers the API routes, but there is still no rate limiting — a signed-in user can spend your API key freely. Keep the allowlist short. Research requests run for one to three minutes; on Vercel the routes ask for `maxDuration = 300`, which needs a plan that allows it.
+
+Supabase pauses free projects after 7 days without a database request, and the free plan allows 2 active projects at a time.
 
 ## Roadmap
 
-- Accounts and a database behind `store.ts`; shareable read-only boards
+- A database behind `store.ts` so boards follow the account rather than the browser; shareable read-only boards
 - Real pictures on picture cards (Open Graph images from cited articles)
 - Multi-select angles, and follow-up questions from the chat that add to an existing board
 - Scheduled refresh of a dossier, with new cards flagged

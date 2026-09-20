@@ -144,3 +144,43 @@ form.ask input::placeholder{color:var(--ink2)}
 .srcs a{color:var(--blue);text-decoration:none}
 .srcs a:hover{text-decoration:underline}
 .srcs li::before{content:"\2197";margin-right:4px;color:var(--ink2)}
+
+/* ---- auth ---------------------------------------------------------------- */
+
+.login{
+  min-height:100dvh; display:grid; place-items:center; padding:24px;
+  background:var(--ground); color:var(--ink); font-family:var(--body);
+}
+.login-card{
+  width:100%; max-width:380px; background:var(--paper); border:1px solid var(--line);
+  border-radius:14px; padding:28px; box-shadow:var(--shadow);
+}
+.login-card h1{ font-family:var(--display); font-weight:800; font-size:28px; margin:0 0 6px; }
+.login-sub{ color:var(--ink2); font-size:14px; line-height:1.5; margin:0 0 20px; }
+.login-form{ display:flex; flex-direction:column; gap:8px; }
+.login-form label{ font-size:12px; font-weight:600; color:var(--ink2); text-transform:uppercase; letter-spacing:.04em; }
+.login-form input{
+  font:inherit; font-size:15px; color:var(--ink); background:var(--panel);
+  border:1px solid var(--line); border-radius:8px; padding:10px 12px;
+}
+.login-form input:focus-visible{ outline:2px solid var(--blue); outline-offset:1px; }
+.login-form button{
+  font:inherit; font-weight:600; font-size:15px; margin-top:6px; padding:10px 12px;
+  color:var(--manila-ink); background:var(--manila); border:1px solid var(--line);
+  border-radius:8px; cursor:pointer;
+}
+.login-form button:disabled{ opacity:.6; cursor:default; }
+.login-note{ font-size:13px; color:var(--ink2); margin:10px 0 0; }
+.login-error{ font-size:13px; color:var(--red); margin:10px 0 0; }
+
+.signout{
+  position:fixed; right:12px; bottom:12px; z-index:50; display:flex; align-items:center; gap:8px;
+  font-family:var(--body); font-size:12px; color:var(--ink2);
+  background:var(--paper); border:1px solid var(--line); border-radius:999px;
+  padding:5px 6px 5px 12px; box-shadow:var(--shadow); max-width:min(90vw,320px);
+}
+.signout span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.signout button{
+  font:inherit; font-weight:600; color:var(--ink); background:var(--panel);
+  border:1px solid var(--line); border-radius:999px; padding:4px 10px; cursor:pointer;
+}
