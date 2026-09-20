@@ -62,4 +62,6 @@ Research requests run for one to three minutes, so the routes declare `maxDurati
 
 ## Scripts
 
-`npm run dev`, `npm run build`, `npm run start`, `npm run lint`
+`npm run dev`, `npm run build`, `npm run start`, `npm run lint`, `npm test`
+
+`npm test` runs the unit tests on Node's built-in runner, which executes the TypeScript directly — there is no test framework to install. `src/lib/cards.test.mts` covers `sanitizeCard`, the function that enforces the URL allow-list behind the "no invented links" guarantee above.
