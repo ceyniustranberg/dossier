@@ -6,7 +6,7 @@ export const maxDuration = 300;
 const SEARCHES = 8;
 
 export async function POST(req: Request) {
-  const denied = await guard();
+  const denied = await guard("research");
   if (denied) return denied;
 
   const client = getClient();

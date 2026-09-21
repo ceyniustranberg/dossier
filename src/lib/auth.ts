@@ -3,6 +3,7 @@ import { cache } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "./supabase/server";
 import { emailAllowed, supabaseEnv } from "./supabase/env";
+import { LIMITS, check, type Bucket } from "./ratelimit";
 
 export type AuthState =
   /** Supabase is not configured and this is a dev build: the prototype runs wide open. */
@@ -44,9 +45,10 @@ export async function isAuthorised(): Promise<boolean> {
 
 /**
  * Guard for route handlers. Returns a Response to send back, or null to continue.
- * Every API route calls this before spending an Anthropic token.
+ * Every API route calls this before spending an Anthropic token. Pass a bucket to
+ * apply a per-user rate limit as well.
  */
-export async function guard(): Promise<Response | null> {
+export async function guard(bucket?: Bucket): Promise<Response | null> {
   const s = await verifySession();
   if (s.mode === "off") return null;
   if (s.mode === "misconfigured")
@@ -55,5 +57,13 @@ export async function guard(): Promise<Response | null> {
       { status: 503 },
     );
   if (!s.user) return Response.json({ error: "Not signed in." }, { status: 401 });
+  if (bucket) {
+    const retry = check(`${bucket}:${s.user.id}`, LIMITS[bucket]);
+    if (retry)
+      return Response.json(
+        { error: `Too many requests. Try again in ${retry}s.` },
+        { status: 429, headers: { "Retry-After": String(retry) } },
+      );
+  }
   return null;
 }

@@ -6,7 +6,7 @@ import type { TriageResult } from "@/lib/types";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const denied = await guard();
+  const denied = await guard("triage");
   if (denied) return denied;
 
   const client = getClient();
