@@ -8,7 +8,7 @@ export interface Limit { max: number; windowMs: number }
 
 // Rough per-user caps. These are per serverless instance, so on Vercel the effective
 // global cap can be a small multiple. Enough to stop a runaway loop from burning the
-// Anthropic key; loose enough that a real user does not feel throttled.
+// OpenRouter credits; loose enough that a real user does not feel throttled.
 export const LIMITS = {
   research: { max: 5, windowMs: 60_000 },
   dig: { max: 15, windowMs: 60_000 },

@@ -45,7 +45,7 @@ export async function isAuthorised(): Promise<boolean> {
 
 /**
  * Guard for route handlers. Returns a Response to send back, or null to continue.
- * Every API route calls this before spending an Anthropic token. Pass a bucket to
+ * Every API route calls this before spending a model token. Pass a bucket to
  * apply a per-user rate limit as well.
  */
 export async function guard(bucket?: Bucket): Promise<Response | null> {

@@ -1,4 +1,4 @@
-import { WEB_SEARCH, cardStream, getClient, ndjson, noKey } from "@/lib/anthropic";
+import { WEB_SEARCH, cardStream, getClient, ndjson, noKey } from "@/lib/llm";
 import { guard } from "@/lib/auth";
 import { digPrompt } from "@/lib/prompts";
 

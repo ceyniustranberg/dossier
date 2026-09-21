@@ -1,4 +1,4 @@
-import { FAST_MODEL, friendly, getClient, noKey } from "@/lib/anthropic";
+import { FAST_MODEL, complete, friendly, getClient, noKey } from "@/lib/llm";
 import { guard } from "@/lib/auth";
 import { triagePrompt } from "@/lib/prompts";
 import type { TriageResult } from "@/lib/types";
@@ -18,11 +18,11 @@ export async function POST(req: Request) {
     .map((x: { q?: unknown; a?: unknown }) => ({ q: String(x?.q ?? "").slice(0, 300), a: String(x?.a ?? "").slice(0, 300) }));
 
   try {
-    const msg = await client.messages.create(
+    const text = await complete(
+      client,
       { model: FAST_MODEL, max_tokens: 400, messages: [{ role: "user", content: triagePrompt(query, asked) }] },
-      { signal: req.signal },
+      req.signal,
     );
-    const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
     const a = text.indexOf("{"), b = text.lastIndexOf("}");
     let r: TriageResult = { ready: true, brief: query };
     try {
@@ -33,6 +33,6 @@ export async function POST(req: Request) {
     } catch { /* fall through: treat as ready */ }
     return Response.json(r);
   } catch (err) {
-    return Response.json({ error: friendly(err) }, { status: 502 });
+    return Response.json({ error: friendly(err, FAST_MODEL) }, { status: 502 });
   }
 }

@@ -32,7 +32,7 @@ function CardViewInner({ card: c, example, createdAt, fileTitle, canDig, draggin
         {c.angle && <div className="angle">{c.angle}</div>}
         {paras.length ? paras.map((p, i) => <p key={i}>{p}</p>) : <p className="sub">Writing the summary…</p>}
         {!!c.takeaways?.length && <ul>{c.takeaways.map((t, i) => <li key={i}>{t}</li>)}</ul>}
-        <div className="foot"><span className="sub">Written by Claude. Check the linked sources before relying on it.</span></div>
+        <div className="foot"><span className="sub">Written by AI. Check the linked sources before relying on it.</span></div>
       </article>
     );
   }
