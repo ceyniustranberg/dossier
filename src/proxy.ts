@@ -18,9 +18,11 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Not configured: the prototype runs wide open in dev. Route handlers still fail closed
-  // in production builds -- see guard() in src/lib/auth.ts.
-  if (!url || !key) return NextResponse.next({ request });
+  // Not configured, or sign-in switched off for local testing: the prototype runs wide open
+  // in dev. Route handlers still fail closed in production builds -- see guard() in
+  // src/lib/auth.ts. Mirrors authBypassed() in src/lib/supabase/env.ts.
+  const bypass = process.env.NODE_ENV !== "production" && process.env.DOSSIER_AUTH === "off";
+  if (!url || !key || bypass) return NextResponse.next({ request });
 
   let response = NextResponse.next({ request });
 

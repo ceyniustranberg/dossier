@@ -2,11 +2,11 @@ import "server-only";
 import { cache } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "./supabase/server";
-import { emailAllowed, supabaseEnv } from "./supabase/env";
+import { authBypassed, emailAllowed, supabaseEnv } from "./supabase/env";
 import { LIMITS, check, type Bucket } from "./ratelimit";
 
 export type AuthState =
-  /** Supabase is not configured and this is a dev build: the prototype runs wide open. */
+  /** Dev build with Supabase unconfigured or `DOSSIER_AUTH=off`: the prototype runs wide open. */
   | { mode: "off"; user: null }
   /** Supabase is not configured but this is a production build: deny everything. */
   | { mode: "misconfigured"; user: null }
@@ -20,6 +20,7 @@ export type AuthState =
  * should lock the app, not silently ship the unauthenticated prototype to the internet.
  */
 export const verifySession = cache(async (): Promise<AuthState> => {
+  if (authBypassed()) return { mode: "off", user: null };
   if (!supabaseEnv().configured) {
     return process.env.NODE_ENV === "production"
       ? { mode: "misconfigured", user: null }

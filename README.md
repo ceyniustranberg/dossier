@@ -25,6 +25,7 @@ npm run dev                  # http://localhost:3000
 | `NEXT_PUBLIC_SUPABASE_URL` | none | Turns auth on (with the key below) |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | none | Publishable key; `NEXT_PUBLIC_SUPABASE_ANON_KEY` also works |
 | `DOSSIER_ALLOWED_EMAILS` | none | Comma-separated allowlist. Empty means any signed-in user |
+| `DOSSIER_AUTH` | none | `off` skips sign-in under `npm run dev`. Ignored in production builds |
 
 Each dossier makes one long model request with up to 8 web searches; Dig deeper uses up to 3. Both are billed to your OpenRouter credits, searches at the search engine's per-request rate on top of tokens.
 

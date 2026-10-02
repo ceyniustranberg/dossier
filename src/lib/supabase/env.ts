@@ -13,6 +13,14 @@ export function supabaseEnv() {
   return { url, key, configured: Boolean(url && key) };
 }
 
+/**
+ * `DOSSIER_AUTH=off` skips sign-in for local testing. Ignored in production builds, so a
+ * stray copy of the variable in a deployment cannot open the app.
+ */
+export function authBypassed(): boolean {
+  return process.env.NODE_ENV !== "production" && process.env.DOSSIER_AUTH === "off";
+}
+
 /** Emails allowed to sign in. Empty means "any authenticated user", which is only safe
  *  if sign-ups are disabled in the Supabase dashboard. */
 export function allowedEmails(): string[] {
