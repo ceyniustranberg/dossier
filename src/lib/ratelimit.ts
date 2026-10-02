@@ -12,6 +12,7 @@ export interface Limit { max: number; windowMs: number }
 export const LIMITS = {
   research: { max: 5, windowMs: 60_000 },
   dig: { max: 15, windowMs: 60_000 },
+  images: { max: 15, windowMs: 60_000 },
   triage: { max: 30, windowMs: 60_000 },
 } as const satisfies Record<string, Limit>;
 

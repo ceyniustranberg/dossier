@@ -4,8 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { EXAMPLE } from "@/lib/example";
 import { readNdjson } from "@/lib/ndjson";
 import { store } from "@/lib/store";
-import { fileNo, fmtDate, type Card, type Dossier, type StreamEvent, type TriageResult } from "@/lib/types";
-import { Board, type BoardHandle } from "./Board";
+import { fileNo, fmtDate, type Action, type Card, type Dossier, type FoundImage, type StreamEvent, type TriageResult } from "@/lib/types";
+import { Board, type BoardHandle, type Ghost } from "./Board";
 
 interface Msg { id: number; who: "me" | "them" | "err"; text: string; chips?: string[]; spent?: boolean }
 const SUGGESTIONS = ["Deep-sea mining", "US", "History of espresso"];
@@ -25,6 +25,7 @@ export function Desk() {
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [pad, setPad] = useState(0);
   const [asking, setAsking] = useState(false);
+  const [placing, setPlacing] = useState<Ghost | null>(null);
 
   const board = useRef<BoardHandle>(null), chat = useRef<HTMLElement>(null), thread = useRef<HTMLDivElement>(null);
   const ctl = useRef<AbortController | null>(null);
@@ -147,11 +148,13 @@ export function Desk() {
     void triage();
   }
 
-  async function dig(id: string) {
+  /** `at` is where the user dragged the action to; without it, the board picks a free spot. */
+  async function dig(id: string, at?: { x: number; y: number }) {
     const d = current.current, parent = d.cards.find((c) => c.id === id);
     if (!parent || busy || !board.current) return;
     if (d.example) say("them", "This is the example file, so branches here aren’t saved. Research your own topic to keep them.");
-    const spot = board.current.freeSpot(id);
+    const spot = at ?? board.current.freeSpot(id);
+    setPlacing({ ...spot, label: "Digging deeper…", from: id });
     setBusy(`Digging into “${parent.title ?? "card"}”…`);
     ctl.current = new AbortController();
     let n = 0, error: string | null = null;
@@ -164,15 +167,45 @@ export function Desk() {
         if (ev.e === "status") setBusy(ev.text);
         else if (ev.e === "card") {
           const cid = `x${Date.now().toString(36)}${n++}`;
+          setPlacing(null);
           setDossier((cur) => ({ ...cur, cards: [...cur.cards, { ...ev.card, id: cid, c: parent.c, rel: undefined, parent: id, ax: spot.x, ay: spot.y, x: spot.x, y: spot.y }] }));
         }
       });
     } catch (e) {
       if ((e as Error).name !== "AbortError") error = "The connection dropped. Anything already filed is kept.";
     }
-    setBusy(null);
+    setBusy(null); setPlacing(null);
     if (error) say("err", error); else if (!n && !ctl.current.signal.aborted) say("them", "Nothing new came back for that card. Try another one.");
   }
+
+  async function findImages(id: string, at?: { x: number; y: number }) {
+    const d = current.current, parent = d.cards.find((c) => c.id === id);
+    if (!parent || busy || !board.current) return;
+    const spot = at ?? board.current.freeSpot(id);
+    setPlacing({ ...spot, label: "Finding images…", from: id });
+    setBusy(`Finding images of “${parent.title ?? "card"}”…`);
+    ctl.current = new AbortController();
+    try {
+      const res = await fetch("/api/images", {
+        method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.current.signal,
+        body: JSON.stringify({ q: parent.q, title: parent.title, file: d.title }),
+      });
+      const r = (await res.json().catch(() => ({}))) as { images?: FoundImage[]; error?: string };
+      if (!res.ok) say("err", r.error || "The server returned an error.");
+      else if (!r.images?.length) say("them", "The search didn’t turn up any usable images for that card. Try “More images” on a different one, or rephrase the topic.");
+      else {
+        const card: Omit<Card, "id"> = { t: "gallery", c: parent.c, parent: id, ax: spot.x, ay: spot.y, x: spot.x, y: spot.y,
+          title: parent.title, q: parent.q || parent.title, images: r.images };
+        setDossier((cur) => ({ ...cur, cards: [...cur.cards, { ...card, id: `g${Date.now().toString(36)}` }] }));
+        if (d.example) say("them", "This is the example file, so these images aren’t saved. Research your own topic to keep them.");
+      }
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") say("err", "Couldn’t reach the server. Check that it is running, then try again.");
+    }
+    setBusy(null); setPlacing(null);
+  }
+
+  const act = (kind: Action, id: string, at?: { x: number; y: number }) => void (kind === "dig" ? dig(id, at) : findImages(id, at));
 
   const open = (d: Dossier) => { if (busy) return; setDossier(d); if (!d.example) store.remember(d.id); setLibOpen(false); };
   const openLib = () => { setFiles(store.list()); setConfirmDel(null); setLibOpen(true); };
@@ -190,13 +223,14 @@ export function Desk() {
         <button className="btn" type="button" onClick={openLib}>Files</button>
       </div>
       <main>
-        <Board ref={board} dossier={dossier} canDig={!busy} bottomPad={pad} onChange={onBoardChange} onDig={dig} />
+        <Board ref={board} dossier={dossier} canDig={!busy} bottomPad={pad} pending={placing} onChange={onBoardChange} onAct={act} />
         <section className={`chat${chatOpen ? "" : " closed"}`} ref={chat} aria-label="Research desk">
           <button className="chat-head" type="button" aria-expanded={chatOpen} onClick={() => setChatOpen((o) => !o)}>
             <span>Research desk</span><span>{chatOpen ? "Hide" : "Show"}</span>
           </button>
           <div className="thread" ref={thread} aria-live="polite">
-            {msgs.map((m) => (
+            {/* The greeting only makes sense on the example board; once a topic is loaded it is noise. */}
+            {(dossier.example ? msgs : msgs.filter((m) => m.id !== 0)).map((m) => (
               <div key={m.id} className={`msg ${m.who === "me" ? "me" : "them"}${m.who === "err" ? " err" : ""}`}>
                 {m.text}
                 {m.chips && (

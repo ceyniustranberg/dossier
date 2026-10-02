@@ -45,6 +45,14 @@ export function researchPrompt(query: string, brief: string, web: boolean, searc
   );
 }
 
+export function imagesPrompt(o: { subject: string; file: string }) {
+  return (
+    `Run ONE web search for pages that show photographs or illustrations of: ${o.subject}` +
+    (o.file && o.file !== o.subject ? ` (in the context of "${o.file}")` : "") +
+    ". Prefer encyclopedia entries, museum and archive pages, and news articles about it, over shops and stock-photo sites. After the search, reply with the single word: done."
+  );
+}
+
 export function digPrompt(o: { title: string; brief: string; card: unknown; others: string[]; web: boolean; searches: number }) {
   return (
     "You are the research engine of Dossier, an app that lays out research as cards on a whiteboard. " +

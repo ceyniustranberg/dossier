@@ -2,7 +2,7 @@
 
 Type a topic, get an in-depth research board.
 
-You enter a high-level query such as "flying cars". If the query is broad or ambiguous ("US"), the research desk asks which angle you want and offers tappable options. The model then searches the web and lays out a dossier as cards on a Miro-like canvas: a central summary, clusters under folder tabs, and cards for findings, figures, timelines, players, real articles, debates, open questions and charts. Any card can be expanded with **Dig deeper**, which branches new cards from it.
+You enter a high-level query such as "flying cars". If the query is broad or ambiguous ("US"), the research desk asks which angle you want and offers tappable options. The model then searches the web and lays out a dossier as cards on a Miro-like canvas: a summary on the left, clusters running to its right under folder tabs, and cards for findings, figures, timelines, players, real articles, debates, open questions and charts. Any card can be expanded with **Dig deeper**, which branches new cards from it, and picture cards can **Find images**. Click either button to let the board pick a free spot, or drag it to wherever the result should go.
 
 Status: prototype. Sign-in is handled by Supabase; boards are still per-browser.
 
@@ -27,7 +27,7 @@ npm run dev                  # http://localhost:3000
 | `DOSSIER_ALLOWED_EMAILS` | none | Comma-separated allowlist. Empty means any signed-in user |
 | `DOSSIER_AUTH` | none | `off` skips sign-in under `npm run dev`. Ignored in production builds |
 
-Each dossier makes one long model request with up to 8 web searches; Dig deeper uses up to 3. Both are billed to your OpenRouter credits, searches at the search engine's per-request rate on top of tokens.
+Each dossier makes one long model request with up to 8 web searches; Dig deeper uses up to 3, and Find images uses 1 (on the fast model). Both are billed to your OpenRouter credits, searches at the search engine's per-request rate on top of tokens.
 
 ## How it works
 
@@ -36,10 +36,12 @@ browser                                   server (Next.js route handlers)
 Desk (chat, files, streaming)   --POST--> /api/triage    fast model -> ready | question + options
 Board (pan, zoom, drag, links)  --POST--> /api/research  model + web search -> NDJSON card stream
 CardView                        --POST--> /api/dig       same, scoped to one card
+                                --POST--> /api/images    one web search -> preview images of the cited pages
 ```
 
 - **Streaming.** The model is asked to write JSON Lines, one card per line. `src/lib/llm.ts` reads the OpenRouter stream, parses each line as it completes, validates it (`src/lib/cards.ts`) and forwards it to the browser as NDJSON, so cards land on the board while the rest is still being written. Web searches show up as status lines.
 - **No invented links.** The server records every URL the web search tool actually cited (OpenRouter `url_citation` annotations). A card that links to a URL not yet cited is held back until the stream ends and checked again, since citations can arrive after the text that uses them. A card's `url` or `sources` survive only if they are on that list; an article card without a real URL is downgraded to an unverified "coverage lead" that links to a news search instead.
+- **Images.** `/api/images` runs one web search, fetches the start of each cited page and takes its Open Graph or Twitter preview image (`src/lib/og.ts`), skipping logos and placeholders. So every image comes from a page the search really returned, and links back to it. Page fetches only go to public hostnames (no IP literals, no `localhost` or `.local`-style names), with each redirect re-checked. Images are hotlinked with `referrerpolicy="no-referrer"`; some sites block that and those cells stay blank.
 - **Layout.** `src/lib/layout.ts` is a pure function: measured card sizes in, positions out. Cards you drag are marked `moved` and never auto-placed again.
 - **Storage.** `src/lib/store.ts` keeps files in the browser's localStorage. It is the one module to replace when a database arrives. Auth is in place, so the Supabase project is already there to put it behind.
 - **Prompts** live in `src/lib/prompts.ts`.

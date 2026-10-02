@@ -65,6 +65,27 @@ export async function complete(client: Client, o: { model: string; max_tokens: n
   return j.choices?.[0]?.message?.content ?? "";
 }
 
+/**
+ * Run one web search and return the pages it cited, in the order they came back. The model's
+ * reply is ignored: the citations are the result, and they are real search hits, not model text.
+ */
+export async function searchPages(client: Client, prompt: string, results: number, signal: AbortSignal): Promise<{ url: string; title: string }[]> {
+  const res = await call(client, {
+    model: FAST_MODEL, max_tokens: 300,
+    messages: [{ role: "user", content: prompt }],
+    tools: [{ type: "openrouter:web_search", parameters: { max_uses: 1, max_results: results } }],
+  }, signal);
+  const j = await res.json() as { choices?: { message?: { annotations?: Annotation[] } }[] };
+  const seen = new Set<string>(), out: { url: string; title: string }[] = [];
+  for (const a of j.choices?.[0]?.message?.annotations ?? []) {
+    const u = a.type === "url_citation" ? a.url_citation?.url : undefined;
+    if (!u || seen.has(normUrl(u))) continue;
+    seen.add(normUrl(u));
+    out.push({ url: u, title: a.url_citation?.title || "" });
+  }
+  return out;
+}
+
 /** Parse an OpenRouter SSE body into its JSON chunks. Comment lines (keep-alives) are skipped. */
 async function* sse(res: Response): AsyncGenerator<Chunk> {
   const reader = res.body!.getReader(), dec = new TextDecoder();

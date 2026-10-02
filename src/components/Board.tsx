@@ -1,8 +1,8 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
-import { CLW, TABH, bounds, freeSpot, relayout, sizeOf } from "@/lib/layout";
-import type { Dossier, Sizes } from "@/lib/types";
+import { CLW, CW, TABH, bounds, freeSpot, relayout, sizeOf } from "@/lib/layout";
+import type { Action, Dossier, Sizes } from "@/lib/types";
 import { CardView } from "./CardView";
 
 export interface BoardHandle {
@@ -12,26 +12,35 @@ export interface BoardHandle {
   freeSpot: (parentId: string) => { x: number; y: number };
 }
 
+/** A tile-sized outline on the board: where a dragged action will land, or where its result is on its way. */
+export interface Ghost { x: number; y: number; label: string; from: string }
+
 interface Props {
   dossier: Dossier;
   canDig: boolean;
   /** Pixels at the bottom of the viewport covered by the chat panel (narrow screens). */
   bottomPad: number;
+  /** Placeholder for a result that is still being fetched. */
+  pending: Ghost | null;
   onChange: (next: Dossier, byUser: boolean) => void;
-  onDig: (id: string) => void;
+  /** Run a card action. `at` is the board position it was dragged to, or absent for a plain click. */
+  onAct: (kind: Action, id: string, at?: { x: number; y: number }) => void;
 }
 
 type View = { x: number; y: number; s: number };
-type Drag = { id: string | null; sx: number; sy: number; ox: number; oy: number; moved: boolean };
+type Drag = { id: string | null; sx: number; sy: number; ox: number; oy: number; moved: boolean; act?: { kind: Action; card: string } };
+const ACT_LABEL: Record<Action, string> = { dig: "Drop to dig deeper here", images: "Drop to place images here" };
 const clampS = (s: number) => Math.max(0.1, Math.min(2.2, s));
 
-export const Board = forwardRef<BoardHandle, Props>(function Board({ dossier, canDig, bottomPad, onChange, onDig }, ref) {
+export const Board = forwardRef<BoardHandle, Props>(function Board({ dossier, canDig, bottomPad, pending, onChange, onAct }, ref) {
   const vp = useRef<HTMLDivElement>(null);
   const nodes = useRef(new Map<string, HTMLElement>());
   const [sizes, setSizes] = useState<Sizes>({});
   const [view, setView] = useState<View>({ x: 0, y: 0, s: 1 });
   const [dragId, setDragId] = useState<string | null>(null);
   const [zOrder, setZOrder] = useState<Record<string, number>>({});
+  const [aim, setAim] = useState<Ghost | null>(null);
+  const eatClick = useRef(false);
   const touched = useRef(false), zTop = useRef(10);
   const ptrs = useRef(new Map<number, { x: number; y: number }>());
   const drag = useRef<Drag | null>(null);
@@ -100,8 +109,24 @@ export const Board = forwardRef<BoardHandle, Props>(function Board({ dossier, ca
 
   const rel = (e: React.PointerEvent) => { const r = vp.current!.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
+  // Where a dragged action tile would land: centred under the pointer, its top edge just above it.
+  const dropAt = (p: { x: number; y: number }) => {
+    const v = live.current.view;
+    return { x: Math.round((p.x - v.x) / v.s - CW / 2), y: Math.round((p.y - v.y) / v.s - 20) };
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
     const target = e.target as Element;
+    // An action button: a click runs it as usual, a drag carries a ghost tile to wherever it is dropped.
+    const btn = target.closest<HTMLButtonElement>("button[data-act]");
+    if (btn) {
+      const card = btn.closest<HTMLElement>("[data-id]")?.dataset.id;
+      if (btn.disabled || !card || ptrs.current.size) return;
+      const p = rel(e);
+      ptrs.current.set(e.pointerId, p);
+      drag.current = { id: null, sx: p.x, sy: p.y, ox: 0, oy: 0, moved: false, act: { kind: btn.dataset.act as Action, card } };
+      return;
+    }
     if (target.closest("a,button")) return;
     try { vp.current?.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     const p = rel(e);
@@ -133,6 +158,12 @@ export const Board = forwardRef<BoardHandle, Props>(function Board({ dossier, ca
     if (!g) return;
     const dx = p.x - g.sx, dy = p.y - g.sy;
     if (!g.moved && Math.hypot(dx, dy) < 6) return;
+    if (g.act) {
+      // Capture only once it is a real drag, so a plain click still reaches the button.
+      if (!g.moved) { g.moved = true; try { vp.current?.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
+      setAim({ ...dropAt(p), label: ACT_LABEL[g.act.kind], from: g.act.card });
+      return;
+    }
     if (!g.moved) {
       g.moved = true;
       if (g.id) { const id = g.id; setDragId(id); setZOrder((z) => ({ ...z, [id]: ++zTop.current })); }
@@ -149,6 +180,17 @@ export const Board = forwardRef<BoardHandle, Props>(function Board({ dossier, ca
     const g = drag.current;
     if (!g || ptrs.current.size) return;
     drag.current = null; setDragId(null);
+    if (g.act) {
+      setAim(null);
+      if (!g.moved) return;
+      // The pointer-up after a drag can still produce a click on the button; swallow it this once.
+      eatClick.current = true; setTimeout(() => { eatClick.current = false; }, 0);
+      // Dropping over the chat panel or zoom controls, or a cancelled gesture, places nothing.
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      if (e.type === "pointercancel" || !under?.closest(".vp")) return;
+      onAct(g.act.kind, g.act.card, dropAt(rel(e)));
+      return;
+    }
     // A tap on a card while zoomed far out zooms in to read it.
     if (g.id && !g.moved && live.current.view.s < 0.55) {
       const c = live.current.dossier.cards.find((k) => k.id === g.id), el = vp.current;
@@ -163,20 +205,35 @@ export const Board = forwardRef<BoardHandle, Props>(function Board({ dossier, ca
   const root = dossier.cards.find((c) => c.id === "root");
   const centre = (id: string) => { const c = dossier.cards.find((k) => k.id === id); if (!c) return null; const z = sizeOf(sizes, c); return { x: c.x + z.w / 2, y: c.y + z.h / 2 }; };
   const paths: { d: string; cls?: string }[] = [];
-  if (root) {
-    const r = sizeOf(sizes, root);
-    dossier.tabs.forEach((t) => {
-      const x1 = root.x + r.w / 2, y1 = t.top ? root.y : root.y + r.h, x2 = t.x + CLW / 2, y2 = t.top ? t.y + TABH : t.y, my = (y1 + y2) / 2;
-      paths.push({ d: `M${x1} ${y1} C${x1} ${my},${x2} ${my},${x2} ${y2}` });
-    });
+  // One rail from the summary's right edge through the row of folder tabs, which paint over it.
+  if (root && dossier.tabs.length) {
+    const r = sizeOf(sizes, root), last = dossier.tabs[dossier.tabs.length - 1], ty = dossier.tabs[0].y + TABH / 2;
+    const x1 = root.x + r.w, y1 = Math.min(Math.max(ty, root.y + 20), root.y + r.h - 20);
+    paths.push({ d: y1 === ty ? `M${x1} ${ty} H${last.x}` : `M${x1} ${y1} C${x1 + 60} ${y1},${dossier.tabs[0].x - 60} ${ty},${dossier.tabs[0].x} ${ty} H${last.x}` });
+  }
+  // Branch wires leave the parent's dig port (the dot on its right edge) heading right, then curve
+  // into the near side of the branch card, or of the ghost tile while it is being placed.
+  const port = (id: string) => { const c = dossier.cards.find((k) => k.id === id); if (!c) return null; const z = sizeOf(sizes, c); return { x: c.x + z.w, y: c.y + z.h / 2 }; };
+  const wire = (a: { x: number; y: number }, box: { x: number; y: number; w: number; h: number }) => {
+    const right = box.x + box.w / 2 >= a.x, b = { x: right ? box.x : box.x + box.w, y: box.y + box.h / 2 };
+    const k = Math.max(60, Math.abs(b.x - a.x) / 2);
+    return `M${a.x} ${a.y} C${a.x + k} ${a.y},${b.x + (right ? -k : k)} ${b.y},${b.x} ${b.y}`;
+  };
+  for (const g of [aim, pending]) {
+    const a = g && port(g.from);
+    if (g && a) paths.push({ d: wire(a, { x: g.x, y: g.y, w: CW, h: 90 }), cls: "kid" });
   }
   dossier.cards.forEach((c) => {
-    const other = c.parent ?? c.rel;
-    if (!other || other === c.id) return;
-    const a = centre(c.id), b = centre(other);
+    if (c.parent && c.parent !== c.id) {
+      const a = port(c.parent);
+      if (a) paths.push({ d: wire(a, { x: c.x, y: c.y, ...sizeOf(sizes, c) }), cls: "kid" });
+      return;
+    }
+    if (!c.rel || c.rel === c.id) return;
+    const a = centre(c.id), b = centre(c.rel);
     if (!a || !b) return;
     const mx = (a.x + b.x) / 2;
-    paths.push({ d: `M${a.x} ${a.y} C${mx} ${a.y},${mx} ${b.y},${b.x} ${b.y}`, cls: c.parent ? "kid" : "rel" });
+    paths.push({ d: `M${a.x} ${a.y} C${mx} ${a.y},${mx} ${b.y},${b.x} ${b.y}`, cls: "rel" });
   });
 
   const centreZoom = (f: number) => { const el = vp.current; if (el) zoomAt(el.clientWidth / 2, el.clientHeight / 2, f); };
@@ -186,8 +243,8 @@ export const Board = forwardRef<BoardHandle, Props>(function Board({ dossier, ca
       <div
         ref={vp}
         className="vp"
-        style={{ backgroundSize: `${28 * view.s}px ${28 * view.s}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerEnd} onPointerCancel={onPointerEnd}
+        onClickCapture={(e) => { if (eatClick.current) { eatClick.current = false; e.stopPropagation(); e.preventDefault(); } }}
       >
         <div className="world" style={{ transform: `translate(${view.x}px,${view.y}px) scale(${view.s})` }}>
           <svg className="links" aria-hidden="true">{paths.map((p, i) => <path key={i} d={p.d} className={p.cls} />)}</svg>
@@ -197,8 +254,10 @@ export const Board = forwardRef<BoardHandle, Props>(function Board({ dossier, ca
             </div>
           ))}
           {dossier.cards.map((c) => (
-            <CardView key={c.id} card={c} example={!!dossier.example} createdAt={dossier.createdAt} fileTitle={dossier.title} canDig={canDig} dragging={dragId === c.id} z={zOrder[c.id]} onDig={onDig} measure={measure} />
+            <CardView key={c.id} card={c} example={!!dossier.example} createdAt={dossier.createdAt} fileTitle={dossier.title} canDig={canDig} dragging={dragId === c.id} z={zOrder[c.id]} onAct={onAct} measure={measure} />
           ))}
+          {pending && <div className="ghost pending" style={{ left: pending.x, top: pending.y, width: CW }}>{pending.label}</div>}
+          {aim && <div className="ghost" style={{ left: aim.x, top: aim.y, width: CW }}>{aim.label}</div>}
         </div>
       </div>
       <div className="zoom">

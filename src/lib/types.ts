@@ -1,8 +1,14 @@
 export type CardType =
   | "summary" | "fact" | "stat" | "timeline" | "player" | "article"
-  | "lead" | "debate" | "question" | "chart" | "picture";
+  | "lead" | "debate" | "question" | "chart" | "picture" | "gallery";
 
 export interface Source { title: string; url: string }
+
+/** An image found on a real web page: `src` is the page's own preview image, `page` is where it came from. */
+export interface FoundImage { src: string; page: string; title: string; alt?: string }
+
+/** What a card's action buttons do. Each can be clicked, or dragged to choose where the result lands. */
+export type Action = "dig" | "images";
 
 export interface Card {
   id: string;
@@ -38,6 +44,8 @@ export interface Card {
   outlet?: string;
   date?: string;
   sources?: Source[];
+  /** gallery cards: images found for the parent card */
+  images?: FoundImage[];
 }
 
 export interface Tab { x: number; y: number; top: boolean }
@@ -75,7 +83,7 @@ export interface TriageResult {
 
 export const CARD_LABELS: Record<Exclude<CardType, "summary">, string> = {
   fact: "Finding", stat: "Figure", timeline: "Timeline", player: "Player", article: "Article",
-  lead: "Coverage lead", debate: "Debate", question: "Open question", chart: "Chart", picture: "Picture lead",
+  lead: "Coverage lead", debate: "Debate", question: "Open question", chart: "Chart", picture: "Picture lead", gallery: "Images",
 };
 
 export const fileNo = (d: Pick<Dossier, "example" | "createdAt">) =>
