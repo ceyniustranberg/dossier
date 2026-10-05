@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { openSignups } from "@/lib/supabase/env";
 import { LoginForm } from "./LoginForm";
 
 export const metadata: Metadata = { title: "Sign in · Dossier" };
@@ -12,7 +13,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       <div className="login-card">
         <h1>Dossier</h1>
         <p className="login-sub">
-          Sign in to get the token that connects your agent. Dossier is invite-only for now; we’ll email you a sign-in link.
+          Sign in to get the token that connects your agent. {openSignups() ? "No password: " : "Dossier is invite-only for now; "}we’ll email you a sign-in link.
         </p>
         <LoginForm />
         {message && (

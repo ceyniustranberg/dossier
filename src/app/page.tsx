@@ -4,6 +4,7 @@ import { Connect } from "@/components/Connect";
 import { MyDossiers } from "@/components/MyDossiers";
 import { SignOut } from "@/components/SignOut";
 import { viewer } from "@/lib/auth";
+import { openSignups } from "@/lib/supabase/env";
 import { activeToken, listDossiers } from "@/lib/repo";
 
 /** Where agents should connect: the configured public URL, else this request's own origin. */
@@ -64,7 +65,7 @@ export default async function Home() {
               {v.bypass ? (
                 <p className="note">Sign-in is switched off locally (<code>DOSSIER_AUTH=off</code>), and a token belongs to a real account. Turn sign-in back on to issue one.</p>
               ) : (
-                <p className="note">Dossier is invite-only for now. <Link href="/login">Sign in</Link> to get your personal token.</p>
+                <p className="note">{openSignups() ? "" : "Dossier is invite-only for now. "}<Link href="/login">Sign in</Link> with your email to get your personal token.</p>
               )}
             </>
           )}

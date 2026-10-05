@@ -6,7 +6,7 @@ Dossier is an MCP server with a board attached. You connect it to Claude Code, C
 
 The server never calls a model. All research runs on your agent, so Dossier itself costs nothing per request beyond hosting.
 
-Status: prototype, invite-only (an email allowlist).
+Status: prototype. Sign-up is open or invite-only depending on `DOSSIER_ALLOWED_EMAILS`.
 
 ## Connect an agent
 
@@ -50,7 +50,7 @@ The Supabase keys are under **Project Settings → API Keys**: the publishable k
 | `NEXT_PUBLIC_SUPABASE_URL` | none | Required |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | none | Required for sign-in; `NEXT_PUBLIC_SUPABASE_ANON_KEY` also works |
 | `SUPABASE_SECRET_KEY` | none | Required. Server-only key for the dossier and token tables |
-| `DOSSIER_ALLOWED_EMAILS` | none | Comma-separated allowlist. Required in production, where an empty list lets nobody in |
+| `DOSSIER_ALLOWED_EMAILS` | none | Comma-separated allowlist, or `*` to let anyone sign up. Required in production, where an empty list lets nobody in |
 | `NEXT_PUBLIC_SITE_URL` | request origin | Public URL used in the connect command and dossier links |
 | `DOSSIER_AUTH` | none | `off` skips sign-in under `npm run dev`; ignored in production. Tokens still need a real account |
 
@@ -79,7 +79,8 @@ Deployed on Vercel; pushes to `main` deploy to production.
 1. Apply the migration to the production Supabase project.
 2. Under **Settings → Environment Variables**, set the variables above; at minimum the two `NEXT_PUBLIC_SUPABASE_*` values, `SUPABASE_SECRET_KEY` (mark it Sensitive) and `DOSSIER_ALLOWED_EMAILS`. `NEXT_PUBLIC_*` values are inlined at build time, so redeploy after changing them. Without the secret key the dossier, token and MCP routes answer 503.
 3. **Settings → Deployment Protection** decides who can reach the app at all. Agents can't get through Vercel's login wall, so to use the MCP server, production has to be public (Standard Protection), leaving the app's own sign-in and the allowlist as the gate. Protecting all deployments keeps the board usable in your own browser, but no agent can connect.
-4. Add the production origin under **Authentication → URL Configuration** in Supabase, or magic links won't redirect back.
+4. **For open sign-up** (`DOSSIER_ALLOWED_EMAILS=*`), set up custom SMTP under **Authentication → Emails** in Supabase (Resend, Postmark and the like). The built-in sender allows only a few emails an hour for the whole project, so public sign-in links would soon stop arriving. Each account is capped at 100 dossiers of 250 cards, and tool calls are rate-limited per user.
+5. Add the production origin under **Authentication → URL Configuration** in Supabase, or magic links won't redirect back.
 
 Supabase pauses free projects after 7 days without a database request.
 

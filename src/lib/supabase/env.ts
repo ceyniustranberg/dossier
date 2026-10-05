@@ -22,7 +22,8 @@ export function authBypassed(): boolean {
 }
 
 /** Emails allowed to sign in. Empty means "any authenticated user" in development only: the
- *  site is public now, so a production build with no allowlist lets nobody in. */
+ *  site is public now, so a production build with no allowlist lets nobody in. `*` opens
+ *  sign-up to everyone; it has to be said explicitly, so a missing variable never opens the app. */
 export function allowedEmails(): string[] {
   return (process.env.DOSSIER_ALLOWED_EMAILS || "")
     .split(",")
@@ -30,8 +31,12 @@ export function allowedEmails(): string[] {
     .filter(Boolean);
 }
 
+/** Anyone with an email address may sign in (`DOSSIER_ALLOWED_EMAILS=*`). */
+export const openSignups = () => allowedEmails().includes("*");
+
 export function emailAllowed(email: string | undefined | null): boolean {
   const list = allowedEmails();
+  if (list.includes("*")) return Boolean(email);
   if (!list.length) return process.env.NODE_ENV !== "production";
   return Boolean(email && list.includes(email.toLowerCase()));
 }
