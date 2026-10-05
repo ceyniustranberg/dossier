@@ -21,8 +21,8 @@ export function authBypassed(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.DOSSIER_AUTH === "off";
 }
 
-/** Emails allowed to sign in. Empty means "any authenticated user", which is only safe
- *  if sign-ups are disabled in the Supabase dashboard. */
+/** Emails allowed to sign in. Empty means "any authenticated user" in development only: the
+ *  site is public now, so a production build with no allowlist lets nobody in. */
 export function allowedEmails(): string[] {
   return (process.env.DOSSIER_ALLOWED_EMAILS || "")
     .split(",")
@@ -32,6 +32,6 @@ export function allowedEmails(): string[] {
 
 export function emailAllowed(email: string | undefined | null): boolean {
   const list = allowedEmails();
-  if (!list.length) return true;
+  if (!list.length) return process.env.NODE_ENV !== "production";
   return Boolean(email && list.includes(email.toLowerCase()));
 }

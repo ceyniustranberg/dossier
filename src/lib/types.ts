@@ -46,6 +46,8 @@ export interface Card {
   sources?: Source[];
   /** gallery cards: images found for the parent card */
   images?: FoundImage[];
+  /** "agent" when the user's own agent wrote the card over MCP, so its links are the agent's citations */
+  via?: "agent";
 }
 
 export interface Tab { x: number; y: number; top: boolean }
@@ -73,13 +75,6 @@ export type StreamEvent =
   | { e: "card"; card: Omit<Card, "x" | "y"> }
   | { e: "error"; message: string }
   | { e: "done"; searches: number };
-
-export interface TriageResult {
-  ready: boolean;
-  brief?: string;
-  question?: string;
-  options?: string[];
-}
 
 export const CARD_LABELS: Record<Exclude<CardType, "summary">, string> = {
   fact: "Finding", stat: "Figure", timeline: "Timeline", player: "Player", article: "Article",

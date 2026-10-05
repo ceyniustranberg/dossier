@@ -22,6 +22,8 @@ interface Props {
   bottomPad: number;
   /** Placeholder for a result that is still being fetched. */
   pending: Ghost | null;
+  /** Viewing someone else's dossier: card actions are hidden. Drags still work but are not saved. */
+  readOnly?: boolean;
   onChange: (next: Dossier, byUser: boolean) => void;
   /** Run a card action. `at` is the board position it was dragged to, or absent for a plain click. */
   onAct: (kind: Action, id: string, at?: { x: number; y: number }) => void;
@@ -32,7 +34,7 @@ type Drag = { id: string | null; sx: number; sy: number; ox: number; oy: number;
 const ACT_LABEL: Record<Action, string> = { dig: "Drop to dig deeper here", images: "Drop to place images here" };
 const clampS = (s: number) => Math.max(0.1, Math.min(2.2, s));
 
-export const Board = forwardRef<BoardHandle, Props>(function Board({ dossier, canDig, bottomPad, pending, onChange, onAct }, ref) {
+export const Board = forwardRef<BoardHandle, Props>(function Board({ dossier, canDig, bottomPad, pending, readOnly, onChange, onAct }, ref) {
   const vp = useRef<HTMLDivElement>(null);
   const nodes = useRef(new Map<string, HTMLElement>());
   const [sizes, setSizes] = useState<Sizes>({});
@@ -254,7 +256,7 @@ export const Board = forwardRef<BoardHandle, Props>(function Board({ dossier, ca
             </div>
           ))}
           {dossier.cards.map((c) => (
-            <CardView key={c.id} card={c} example={!!dossier.example} createdAt={dossier.createdAt} fileTitle={dossier.title} canDig={canDig} dragging={dragId === c.id} z={zOrder[c.id]} onAct={onAct} measure={measure} />
+            <CardView key={c.id} card={c} example={!!dossier.example} createdAt={dossier.createdAt} fileTitle={dossier.title} canDig={canDig} readOnly={!!readOnly} dragging={dragId === c.id} z={zOrder[c.id]} onAct={onAct} measure={measure} />
           ))}
           {pending && <div className="ghost pending" style={{ left: pending.x, top: pending.y, width: CW }}>{pending.label}</div>}
           {aim && <div className="ghost" style={{ left: aim.x, top: aim.y, width: CW }}>{aim.label}</div>}

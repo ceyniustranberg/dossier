@@ -20,31 +20,6 @@ const RULES = (web: boolean) =>
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function triagePrompt(query: string, asked: { q: string; a: string }[]) {
-  const qa = asked.map((x) => `Q: ${x.q}\nA: ${x.a}`).join("\n");
-  return (
-    "You are the intake desk of a research app that builds in-depth dossiers on a topic. Decide whether the request is specific enough to research well, or so broad that the user should first choose an angle.\n\n" +
-    `Request: ${JSON.stringify(query)}\n` + (qa ? `Clarifications so far:\n${qa}\n` : "") +
-    '\nGuidance: a request like "flying cars", "deep-sea mining" or "history of espresso" is specific enough. A request like "US", "AI", "Apple", "music" or a bare name with several meanings is too broad or ambiguous: ask ONE short question with 3 to 6 short tappable options (2-4 words each). If clarifications already narrow it enough, it is ready. Reply in the language of the request.\n\n' +
-    'Reply with only JSON: {"ready":true,"brief":"one sentence stating exactly what to research"} or {"ready":false,"question":"...","options":["...","..."]}'
-  );
-}
-
-export function researchPrompt(query: string, brief: string, web: boolean, searches: number) {
-  return (
-    "You are the research engine of Dossier, an app that lays out an in-depth briefing on a topic as cards on a whiteboard.\n\n" +
-    `Today is ${today()}.\nResearch brief: ${brief}\n(Original request: ${JSON.stringify(query)})\n\n` +
-    (web
-      ? `Step 1: run up to ${searches} web searches to gather recent developments, news coverage, key numbers and anything you are unsure of. Do not write commentary between searches.\nStep 2: write the dossier, combining what you found with your own knowledge.\n\n`
-      : "Write the dossier from your own knowledge.\n\n") +
-    "Output format for the dossier: JSON Lines. One complete JSON object per line, no code fences, no text outside the objects, no line breaks inside an object.\n" +
-    'Line 1: {"t":"plan","title":"short file title","angle":"one line on the scope taken","clusters":["...", "..."]}  (5 or 6 clusters, 1-3 words each, covering the topic from distinct sides)\n' +
-    'Line 2: {"t":"summary","body":"two short paragraphs separated by \\n\\n","takeaways":["4 or 5 one-line takeaways"]}\n' +
-    `Then 18 to 22 card lines. "c" is the zero-based cluster index. Give each cluster 3 or 4 cards and mix the types; include at least one timeline, two stats, ${web ? "four articles" : "two leads"}, one debate, two questions, one picture, and a chart only if you have solid numbers. Optionally add "rel":"<id of an earlier card in another cluster>" on up to 4 cards that are strongly connected. Card shapes:\n` +
-    CARD_SPEC(web) + "\n\n" + RULES(web)
-  );
-}
-
 export function imagesPrompt(o: { subject: string; file: string }) {
   return (
     `Run ONE web search for pages that show photographs or illustrations of: ${o.subject}` +

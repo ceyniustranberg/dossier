@@ -57,15 +57,26 @@ export function relayout(d: Dossier, sizes: Sizes): Dossier {
   });
 
   // Branch columns go last and step down past every card and tab already placed, including earlier branches.
-  const isBranch = (c: Card) => !!c.parent && !c.moved && c.ax != null && c.ay != null;
+  // A branch with no anchor (written by the user's agent, which knows nothing of the canvas) gets a lane of
+  // its own to the right of the last cluster, one lane per parent, level with the parent. That depends only
+  // on the dossier, so every viewer sees the same board and nothing has to be stored.
+  const isBranch = (c: Card) => !!c.parent && !c.moved;
+  const laneX = ROOTW + RING + d.clusters.length * (CLW + CLGAP), lanes = new Map<string, number>();
   const taken: Rect[] = [...d.cards.filter((c) => !isBranch(c)).map(rectOf), ...tabs.map((t) => ({ x: t.x, y: t.y, w: CLW, h: TABH }))];
   const branchY = new Map<string, number>();
   for (const c of d.cards) {
     if (!isBranch(c)) continue;
-    const key = `${c.parent}:${c.ax}:${c.ay}`, z = sizeOf(sizes, c);
-    const y = clearY({ x: c.ax!, y: branchY.get(key) ?? c.ay!, ...z }, taken, 1);
-    pos.set(c.id, { x: c.ax!, y });
-    taken.push({ x: c.ax!, y, ...z });
+    let ax = c.ax, ay = c.ay;
+    if (ax == null || ay == null) {
+      if (!lanes.has(c.parent!)) lanes.set(c.parent!, lanes.size);
+      const p = d.cards.find((k) => k.id === c.parent), pp = p && (pos.get(p.id) ?? p);
+      ax = laneX + lanes.get(c.parent!)! * (CW + 50);
+      ay = Math.max(0, pp?.y ?? 0);
+    }
+    const key = `${c.parent}:${ax}:${ay}`, z = sizeOf(sizes, c);
+    const y = clearY({ x: ax, y: branchY.get(key) ?? ay, ...z }, taken, 1);
+    pos.set(c.id, { x: ax, y });
+    taken.push({ x: ax, y, ...z });
     branchY.set(key, y + z.h + GAP);
   }
 

@@ -77,6 +77,21 @@ describe("relayout", () => {
     }
   });
 
+  test("branches from the agent, which have no anchor, get lanes to the right of the clusters", () => {
+    let d = settle(board([card("a1", 0), card("a2", 1), card("b1", 2)]), {});
+    const kids = [
+      ...[0, 1, 2].map((i) => card(`p${i}`, 0, { parent: "a1" })),
+      ...[0, 1].map((i) => card(`q${i}`, 2, { parent: "b1" })),
+    ];
+    d = settle({ ...d, cards: [...d.cards, ...kids] }, {});
+    assert.deepEqual(overlaps(d, {}), []);
+    const rightOfClusters = Math.max(...d.tabs.map((t) => t.x)) + 694;
+    const lane = (id: string) => d.cards.find((c) => c.id === id)!.x;
+    for (const k of kids) assert.ok(lane(k.id) >= rightOfClusters, `${k.id} sits right of the clusters`);
+    assert.equal(lane("p0"), lane("p2"), "one lane per parent");
+    assert.ok(lane("q0") > lane("p0"), "the next parent gets the next lane");
+  });
+
   test("an untouched board keeps its tidy stacks", () => {
     const d = settle(board([card("a1", 2), card("a2", 2), card("a3", 2)]), {});
     const [a1, a2, a3] = ["a1", "a2", "a3"].map((id) => d.cards.find((c) => c.id === id)!);

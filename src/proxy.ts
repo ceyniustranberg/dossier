@@ -6,13 +6,20 @@ import { NextResponse, type NextRequest } from "next/server";
  * name -- most Supabase guides still show the old name.
  *
  * Two jobs: refresh the Supabase session cookie on every request (tokens expire otherwise),
- * and bounce signed-out visitors to /login. The redirect is an optimistic check only --
- * real enforcement lives in src/lib/auth.ts, next to the data it protects.
+ * and bounce signed-out visitors to /login from the few pages that need an account. The
+ * redirect is an optimistic check only -- real enforcement lives in src/lib/auth.ts and the
+ * route handlers, next to the data they protect.
+ *
+ * The landing page and dossier boards are public: a board's unlisted link is its access control.
  */
 
-const PUBLIC = ["/login", "/auth"];
+const PUBLIC = ["/login", "/auth", "/d"];
 
 export async function proxy(request: NextRequest) {
+  // The MCP endpoint authenticates with a bearer token, never a cookie: skip the Supabase
+  // round-trip that refreshing a (missing) session would cost on every tool call.
+  if (request.nextUrl.pathname.startsWith("/api/mcp")) return NextResponse.next();
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
@@ -43,7 +50,7 @@ export async function proxy(request: NextRequest) {
   const { data } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC.some((p) => path === p || path.startsWith(`${p}/`));
+  const isPublic = path === "/" || PUBLIC.some((p) => path === p || path.startsWith(`${p}/`));
 
   // API routes must never be redirected: fetch() would follow the 307 and hand the caller
   // an HTML login page to parse as JSON. guard() in each handler answers with a 401 instead.

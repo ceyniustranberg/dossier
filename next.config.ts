@@ -14,7 +14,11 @@ const nextConfig: NextConfig = {
   // root as ~/, which drags unrelated files into module resolution. Pin it to this project.
   turbopack: { root: path.join(__dirname) },
   async headers() {
-    return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+    return [
+      { source: "/:path*", headers: SECURITY_HEADERS },
+      // A board's URL is its only secret: never send it to the sites its links point at.
+      { source: "/d/:path*", headers: [{ key: "Referrer-Policy", value: "no-referrer" }, { key: "X-Robots-Tag", value: "noindex, nofollow" }] },
+    ];
   },
 };
 

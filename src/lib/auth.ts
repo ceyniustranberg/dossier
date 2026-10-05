@@ -4,6 +4,7 @@ import type { User } from "@supabase/supabase-js";
 import { createClient } from "./supabase/server";
 import { authBypassed, emailAllowed, supabaseEnv } from "./supabase/env";
 import { LIMITS, check, type Bucket } from "./ratelimit";
+import { RepoError, meta, type DossierMeta } from "./repo";
 
 export type AuthState =
   /** Dev build with Supabase unconfigured or `DOSSIER_AUTH=off`: the prototype runs wide open. */
@@ -38,6 +39,17 @@ export const verifySession = cache(async (): Promise<AuthState> => {
   return { mode: "on", user: data.user };
 });
 
+/**
+ * Who is looking at a page. `bypass` is the dev-only `DOSSIER_AUTH=off` (or Supabase unconfigured
+ * in dev), where the local viewer is treated as the owner of every dossier.
+ */
+export async function viewer(): Promise<{ user: User | null; bypass: boolean }> {
+  const s = await verifySession();
+  return { user: s.mode === "on" ? s.user : null, bypass: s.mode === "off" };
+}
+
+export const owns = (v: { user: User | null; bypass: boolean }, owner: string) => v.bypass || v.user?.id === owner;
+
 /** True when the caller may use the app. */
 export async function isAuthorised(): Promise<boolean> {
   const s = await verifySession();
@@ -67,4 +79,23 @@ export async function guard(bucket?: Bucket): Promise<Response | null> {
       );
   }
   return null;
+}
+
+/**
+ * Guard for routes that change a dossier: signed in, within the rate limit, and the owner.
+ * Anyone else gets a 404, so the response does not confirm that an unlisted id exists.
+ */
+export async function ownerGuard(id: string, bucket?: Bucket): Promise<{ meta: DossierMeta } | Response> {
+  const denied = await guard(bucket);
+  if (denied) return denied;
+  const [v, m] = await Promise.all([viewer(), meta(id)]);
+  if (!m || !owns(v, m.owner)) return Response.json({ error: "No such dossier." }, { status: 404 });
+  return { meta: m };
+}
+
+/** A RepoError as a JSON response; anything else is logged and reported generically. */
+export function repoFail(e: unknown): Response {
+  if (e instanceof RepoError) return Response.json({ error: e.message }, { status: e.status });
+  console.error(e);
+  return Response.json({ error: "Something went wrong on the server." }, { status: 500 });
 }
