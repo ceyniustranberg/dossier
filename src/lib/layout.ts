@@ -99,29 +99,4 @@ export function bounds(d: Dossier, sizes: Sizes): Rect | null {
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
-/** Find an empty column near `parent`, preferring spots to its right, the way the board grows. */
-export function freeSpot(d: Dossier, sizes: Sizes, parentId: string): { x: number; y: number } {
-  const p = d.cards.find((c) => c.id === parentId);
-  if (!p) return { x: 0, y: 0 };
-  const rects: Rect[] = [
-    ...d.cards.map((c) => ({ x: c.x, y: c.y, ...sizeOf(sizes, c) })),
-    ...d.tabs.map((t) => ({ x: t.x, y: t.y, w: CLW, h: TABH })),
-  ];
-  const ps = sizeOf(sizes, p), pcx = p.x + ps.w / 2, pcy = p.y + ps.h / 2, need = { w: CW, h: 820 };
-  const cands: { x: number; y: number; d: number }[] = [];
-  for (let i = -7; i <= 7; i++) for (let j = -6; j <= 6; j++) {
-    const x = p.x + i * (CW + 50), y = p.y + j * 260, cx = x + CW / 2, cy = y + 200;
-    const leftward = cx < pcx ? 500 : 0;
-    cands.push({ x, y, d: Math.hypot(cx - pcx, cy - pcy) + leftward });
-  }
-  cands.sort((a, b) => a.d - b.d);
-  const hit = (c: { x: number; y: number }, r: Rect) =>
-    c.x < r.x + r.w + 24 && c.x + need.w + 24 > r.x && c.y < r.y + r.h + 24 && c.y + need.h + 24 > r.y;
-  const free = cands.find((c) => !rects.some((r) => hit(c, r)));
-  if (free) return { x: free.x, y: free.y };
-  // Nowhere nearby: start a column just past the right edge of the board.
-  const b = bounds(d, sizes)!;
-  return { x: b.x + b.w + 50, y: p.y };
-}
-
 export { sizeOf };

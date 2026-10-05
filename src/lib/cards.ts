@@ -6,27 +6,34 @@ const str = (v: unknown, max: number) => (typeof v === "string" || typeof v === 
 const strs = (v: unknown, n: number, max: number) =>
   Array.isArray(v) ? v.map((x) => str(x, max)).filter((x): x is string => !!x).slice(0, n) : undefined;
 
-export const normUrl = (u: string) => u.trim().replace(/#.*$/, "").replace(/\/$/, "");
+const normUrl = (u: string) => u.trim().replace(/#.*$/, "").replace(/\/$/, "");
 
 /** A sanitized card, before the board gives it a position. */
 export type CardContent = Omit<Card, "x" | "y">;
-
-/** How one sanitizer judges links: the URL to keep (or undefined to drop it), and a title for it. */
-interface UrlPolicy { ok: (u: unknown) => string | undefined; title: (u: string, given?: string) => string }
 
 /** `sources` may be plain URLs or `{ url, title }` objects; agents tend to send the latter. */
 const sourceList = (v: unknown): { url: unknown; title?: string }[] =>
   (Array.isArray(v) ? v : []).map((s) => (s && typeof s === "object" ? { url: (s as Record<string, unknown>).url, title: str((s as Record<string, unknown>).title, 200) } : { url: s }));
 
-function core(o: Record<string, unknown>, urls: UrlPolicy): CardContent | null {
+/** A link survives if it is an ordinary public http(s) URL; anything else (javascript:, localhost, private IPs) is dropped. */
+const okUrl = (u: unknown) => (typeof u === "string" ? publicUrl(u.trim())?.href : undefined);
+const sourceTitle = (u: string, given?: string) => given || (publicUrl(u)?.hostname.replace(/^www\./, "") ?? "Source");
+
+/**
+ * Turn one card written by the user's own agent over MCP into a safe card. The server never saw
+ * that agent's searches, so there is no allow-list to check links against: a link survives if it
+ * is an ordinary public http(s) URL, and the card is marked `via: "agent"` so the board can say
+ * whose citation it is.
+ */
+export function sanitizeAgentCard(o: Record<string, unknown>): CardContent | null {
   let t = o.t as CardType;
   if (!TYPES.includes(t)) return null;
-  let url = urls.ok(o.url);
+  let url = okUrl(o.url);
   if (t === "article" && !url) { t = "lead"; url = undefined; }
   const sources: Source[] = sourceList(o.sources)
-    .map((s) => ({ url: urls.ok(s.url), given: s.title }))
-    .filter((s): s is { url: string; given: string | undefined } => !!s.url && s.url !== url).slice(0, 2)
-    .map((s) => ({ url: s.url, title: urls.title(s.url, s.given) }));
+    .map((s) => ({ url: okUrl(s.url), given: s.title }))
+    .filter((s): s is { url: string; given: string | undefined } => !!s.url && normUrl(s.url) !== normUrl(url ?? "")).slice(0, 2)
+    .map((s) => ({ url: s.url, title: sourceTitle(s.url, s.given) }));
   const card: CardContent = {
     id: str(o.id, 24) ?? "", t, c: Math.max(0, Math.trunc(Number(o.c)) || 0),
     rel: str(o.rel, 24), title: str(o.title, 200), body: str(o.body, 1200), num: str(o.num, 40), role: str(o.role, 120),
@@ -40,32 +47,9 @@ function core(o: Record<string, unknown>, urls: UrlPolicy): CardContent | null {
           .filter((b) => Number.isFinite(b.value))
       : undefined,
     sources: sources.length ? sources : undefined,
+    via: "agent",
   };
   return JSON.parse(JSON.stringify(card));
-}
-
-/**
- * Turn one model-written JSON object into a safe card. `allowed` maps the URLs that web search
- * really returned to their titles: any other URL is dropped, so the board never shows a made-up link.
- */
-export function sanitizeCard(o: Record<string, unknown>, allowed: Map<string, string>): CardContent | null {
-  return core(o, {
-    ok: (u) => (typeof u === "string" && allowed.has(normUrl(u)) ? u.trim() : undefined),
-    title: (u) => allowed.get(normUrl(u)) || "Source",
-  });
-}
-
-/**
- * The same for a card written by the user's own agent over MCP. The server never saw that agent's
- * searches, so there is no allow-list to check against: a link survives if it is an ordinary public
- * http(s) URL, and the card is marked `via: "agent"` so the board can say whose citation it is.
- */
-export function sanitizeAgentCard(o: Record<string, unknown>): CardContent | null {
-  const card = core(o, {
-    ok: (u) => (typeof u === "string" ? publicUrl(u.trim())?.href : undefined),
-    title: (u, given) => given || (publicUrl(u)?.hostname.replace(/^www\./, "") ?? "Source"),
-  });
-  return card && { ...card, via: "agent" };
 }
 
 /** An href that is safe to render: http(s) only. A last line of defence behind the write-time checks. */

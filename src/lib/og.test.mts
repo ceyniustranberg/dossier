@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { previewImage, publicUrl } from "./og.ts";
 
 /**
- * `/api/images` fetches pages the web search cited and shows their preview images. `publicUrl`
+ * `add_images` fetches pages the agent passed and shows their preview images. `publicUrl`
  * is what stops that from being pointed at the server's own network, and `previewImage` is what
  * decides which picture a page offers.
  */

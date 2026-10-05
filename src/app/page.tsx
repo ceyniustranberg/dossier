@@ -49,7 +49,7 @@ export default async function Home() {
             <li><b>Connect.</b> One command adds Dossier to your agent.</li>
             <li><b>Ask.</b> &ldquo;Make me a dossier on deep-sea mining.&rdquo; If the topic is broad, your agent asks which angle you want.</li>
             <li><b>Watch.</b> Your agent replies with a link. Cards land on the board while it researches.</li>
-            <li><b>Explore.</b> Drag cards around, or pull <em>Dig deeper</em> out of any card to branch off it. Ask your agent to go deeper too.</li>
+            <li><b>Explore.</b> Drag cards around and share the link. Ask your agent to dig deeper into any card, or to add images of it, and the new cards branch off it.</li>
           </ol>
         </section>
 

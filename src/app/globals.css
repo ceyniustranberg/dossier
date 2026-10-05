@@ -153,37 +153,13 @@ main{flex:1;position:relative;min-height:0}
   border:1px solid var(--line); border-radius:999px; padding:4px 10px; cursor:pointer;
 }
 
-/* drag-to-place actions and image tiles */
-.foot button[data-act]:not(:disabled){cursor:grab;touch-action:none}
-.ghost{position:absolute;min-height:90px;padding:12px 14px;border:1px dashed var(--manila);background:rgba(255,176,0,.06);
-  color:var(--manila);font:500 10.5px var(--mono);letter-spacing:.09em;text-transform:uppercase;pointer-events:none;z-index:1000}
-.ghost::before{content:"> "}
-.ghost.pending{animation:pulse 1s infinite alternate}
-@media (prefers-reduced-motion: reduce){.ghost.pending{animation:none}}
+/* image tiles */
 .card.gallery .kind em{color:var(--ink2)}
 .gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:2px 0 8px}
 .gallery a{display:block;height:86px;border:1px solid var(--line);
   background:repeating-linear-gradient(135deg,transparent 0 9px,var(--line) 9px 10px)}
 .gallery a:hover{border-color:var(--manila)}
 .gallery img{display:block;width:100%;height:100%;object-fit:cover}
-
-/* "dig deeper" connector port on the card's right edge */
-.port{position:absolute;right:-13px;top:50%;width:26px;height:26px;margin-top:-13px;padding:0;border:0;background:none;
-  display:grid;place-items:center;cursor:grab;touch-action:none;z-index:2}
-.port::before{content:"";width:12px;height:12px;border-radius:50%;background:var(--paper);border:1.5px solid var(--ink2);
-  transition:transform .12s,background-color .12s,border-color .12s}
-.card:hover .port:not(:disabled)::before{border-color:var(--manila)}
-.port:hover:not(:disabled)::before,.port:focus-visible::before{background:var(--manila);border-color:var(--manila);transform:scale(1.3)}
-.port:focus-visible{outline:none}
-.port span{position:absolute;left:28px;top:50%;transform:translateY(-50%);white-space:nowrap;padding:2px 6px;
-  font:500 10.5px var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--manila);background:var(--paper);border:1px solid var(--manila);
-  opacity:0;pointer-events:none;transition:opacity .12s}
-.port:hover:not(:disabled) span,.port:focus-visible span{opacity:1}
-.port:disabled{cursor:default}
-.port:disabled::before{opacity:.35}
-/* keep the hover label above neighbouring cards */
-.card:has(.port:hover),.card:has(.port:focus-visible){z-index:1001!important}
-@media (prefers-reduced-motion: reduce){.port::before,.port span{transition:none}}
 
 /* ---- board page: live indicator, status toast, empty state -------------------------------- */
 a.mark{color:inherit;text-decoration:none}

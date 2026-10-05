@@ -1,25 +1,20 @@
 import { memo } from "react";
 import { safeHref } from "@/lib/cards";
-import { CARD_LABELS, fileNo, fmtDate, type Action, type Card } from "@/lib/types";
+import { CARD_LABELS, fileNo, fmtDate, type Card } from "@/lib/types";
 
 interface Props {
   card: Card;
   example: boolean;
   createdAt: number;
   fileTitle: string;
-  canDig: boolean;
-  /** Hide the card actions: the viewer doesn't own this dossier. */
-  readOnly: boolean;
   dragging: boolean;
   z?: number;
-  /** Clicking an action button runs it with an automatic spot; dragging one is handled by the Board. */
-  onAct: (kind: Action, id: string) => void;
   measure: (id: string, el: HTMLElement | null) => void;
 }
 
 const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
 
-function CardViewInner({ card: c, example, createdAt, fileTitle, canDig, readOnly, dragging, z, onAct, measure }: Props) {
+function CardViewInner({ card: c, example, createdAt, fileTitle, dragging, z, measure }: Props) {
   const file = { example, createdAt, title: fileTitle };
   const style = { left: c.x, top: c.y, zIndex: z };
   const cls = `card ${c.t}${dragging ? " dragging" : ""}`;
@@ -46,11 +41,8 @@ function CardViewInner({ card: c, example, createdAt, fileTitle, canDig, readOnl
   const link =
     c.t === "article" && safeHref(c.url) ? { href: safeHref(c.url)!, text: "Read article" }
     : c.t === "lead" ? { href: "https://news.google.com/search?q=" + encodeURIComponent(c.q || c.title || ""), text: "Find coverage" }
-    : c.t === "gallery" || (c.t === "picture" && readOnly) ? { href: imageSearch, text: c.t === "picture" ? "Find images" : "More images" }
+    : c.t === "gallery" || c.t === "picture" ? { href: imageSearch, text: c.t === "picture" ? "Find images" : "More images" }
     : null;
-  const act = (kind: Action, text: string) => (
-    <button type="button" data-act={kind} disabled={!canDig} title="Click, or drag to choose where the result goes" onClick={() => onAct(kind, c.id)}>{text}</button>
-  );
 
   return (
     <article className={cls} style={style} data-id={c.id} ref={(el) => measure(c.id, el)}>
@@ -101,16 +93,7 @@ function CardViewInner({ card: c, example, createdAt, fileTitle, canDig, readOnl
       {!!c.sources?.length && (
         <ul className="srcs">{c.sources.map((s) => <li key={s.url}><a href={safeHref(s.url)} target="_blank" rel="noopener noreferrer" title={s.title}>{host(s.url)}</a></li>)}</ul>
       )}
-      {(c.t === "picture" || link) && (
-        <div className="foot">
-          {c.t === "picture" && !readOnly ? act("images", "Find images") : <a href={link!.href} target="_blank" rel="noopener noreferrer">{link!.text}</a>}
-        </div>
-      )}
-      {/* A connector port on the card's edge: drag it out to place the branch, or click for an automatic spot. */}
-      {c.t !== "gallery" && !readOnly && (
-        <button type="button" className="port" data-act="dig" disabled={!canDig} aria-label="Dig deeper" title="Dig deeper: drag to place, or click"
-          onClick={() => onAct("dig", c.id)}><span>Dig deeper</span></button>
-      )}
+      {link && <div className="foot"><a href={link.href} target="_blank" rel="noopener noreferrer">{link.text}</a></div>}
     </article>
   );
 }

@@ -7,14 +7,14 @@ const store = new Map<string, Window>();
 export interface Limit { max: number; windowMs: number }
 
 // Rough per-user caps. These are per serverless instance, so on Vercel the effective
-// global cap can be a small multiple. Enough to stop a runaway loop from burning the
-// OpenRouter credits; loose enough that a real user does not feel throttled.
+// global cap can be a small multiple. Enough to stop a runaway loop from hammering the
+// database or the pages add_images fetches; loose enough that a real user does not feel throttled.
 export const LIMITS = {
-  dig: { max: 15, windowMs: 60_000 },
+  // add_images: each call fetches up to 10 outside pages.
   images: { max: 15, windowMs: 60_000 },
   // MCP tool calls from the user's own agent; a dossier is a handful of these.
   mcp: { max: 120, windowMs: 60_000 },
-  // Card drags and drop spots saved from the board.
+  // Card drags saved from the board.
   board: { max: 240, windowMs: 60_000 },
   // Issuing or revoking the personal MCP token.
   token: { max: 10, windowMs: 60_000 },

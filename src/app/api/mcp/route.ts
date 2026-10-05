@@ -4,7 +4,7 @@ import { INSTRUCTIONS, registerTools, type Caller } from "@/lib/mcp";
 import { RepoError, findToken, touchToken } from "@/lib/repo";
 import { emailAllowed } from "@/lib/supabase/env";
 
-// find_images runs a web search and fetches pages; everything else returns in well under a second.
+// add_images fetches up to 10 outside pages; everything else returns in well under a second.
 export const maxDuration = 60;
 
 const handler = createMcpHandler(registerTools, {

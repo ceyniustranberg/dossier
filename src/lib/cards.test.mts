@@ -1,51 +1,31 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { normUrl, sanitizeCard } from "./cards.ts";
+import { sanitizeAgentCard } from "./cards.ts";
 
 /**
- * `sanitizeCard` is the boundary between what Claude wrote and what the board shows.
- * Its job is to guarantee the README's first promise: a card can only carry a URL that
- * the web search tool actually returned. These tests exist so that promise cannot be
- * refactored away silently.
+ * `sanitizeAgentCard` is the boundary between what the user's agent sent over MCP and what the
+ * board shows. Link checks specific to agent cards (private hosts, javascript:, the agent-cited
+ * mark) are in agent.test.mts; these cover the shape guarantees every card gets.
  */
 
-const ALLOWED = () =>
-  new Map<string, string>([
-    ["https://real.example/story", "A Real Story"],
-    ["https://real.example/other", "Another Story"],
-  ]);
-
-/** sanitizeCard, asserting it did not reject the card. */
-function must(o: Record<string, unknown>, allowed = ALLOWED()) {
-  const c = sanitizeCard(o, allowed);
+/** sanitizeAgentCard, asserting it did not reject the card. */
+function must(o: Record<string, unknown>) {
+  const c = sanitizeAgentCard(o);
   if (!c) throw new Error(`expected a card, got null for ${JSON.stringify(o)}`);
   return c;
 }
 
-describe("normUrl", () => {
-  test("trims, drops the fragment and drops one trailing slash", () => {
-    assert.equal(normUrl("  https://a.test/x  "), "https://a.test/x");
-    assert.equal(normUrl("https://a.test/x#section"), "https://a.test/x");
-    assert.equal(normUrl("https://a.test/x/"), "https://a.test/x");
-    assert.equal(normUrl("https://a.test/x/#section"), "https://a.test/x");
-  });
-
-  test("leaves an already-normal URL alone", () => {
-    assert.equal(normUrl("https://a.test/x"), "https://a.test/x");
-  });
-});
-
 describe("card type gating", () => {
   test("rejects an unknown type", () => {
-    assert.equal(sanitizeCard({ t: "wormhole", title: "x" }, ALLOWED()), null);
+    assert.equal(sanitizeAgentCard({ t: "wormhole", title: "x" }), null);
   });
 
   test("rejects a missing type", () => {
-    assert.equal(sanitizeCard({ title: "x" }, ALLOWED()), null);
+    assert.equal(sanitizeAgentCard({ title: "x" }), null);
   });
 
-  test("rejects 'summary', which is handled as its own stream event, not as a card", () => {
-    assert.equal(sanitizeCard({ t: "summary", body: "x" }, ALLOWED()), null);
+  test("rejects 'summary', which is written with update_dossier, not as a card", () => {
+    assert.equal(sanitizeAgentCard({ t: "summary", body: "x" }), null);
   });
 
   test("accepts every type the board can render", () => {
@@ -55,45 +35,26 @@ describe("card type gating", () => {
   });
 });
 
-describe("URL allow-list — the no-invented-links guarantee", () => {
-  test("drops a URL that web search never returned", () => {
-    const c = must({ t: "fact", title: "x", url: "https://invented.example/nope" });
-    assert.ok(!("url" in c), "a URL outside the allow-list must not reach the board");
-  });
-
-  test("keeps a URL that web search returned", () => {
+describe("links", () => {
+  test("keeps a public article URL", () => {
     const c = must({ t: "article", title: "x", url: "https://real.example/story" });
     assert.equal(c.url, "https://real.example/story");
     assert.equal(c.t, "article");
   });
 
-  test("downgrades an article with no verifiable URL to an unverified lead", () => {
-    const c = must({ t: "article", title: "Headline", url: "https://invented.example/nope" });
-    assert.equal(c.t, "lead", "an article without a real URL must become a lead");
-    assert.ok(!("url" in c));
-  });
-
-  test("downgrades an article that supplied no URL at all", () => {
+  test("downgrades an article that supplied no URL to a lead", () => {
     const c = must({ t: "article", title: "Headline" });
     assert.equal(c.t, "lead");
   });
 
   test("does not change the type of a non-article whose URL was dropped", () => {
-    const c = must({ t: "player", title: "x", url: "https://invented.example/nope" });
+    const c = must({ t: "player", title: "x", url: "javascript:alert(1)" });
     assert.equal(c.t, "player");
+    assert.ok(!("url" in c));
   });
 
-  test("matches the allow-list modulo trailing slash and fragment", () => {
-    for (const u of [
-      "https://real.example/story/",
-      "https://real.example/story#top",
-      "https://real.example/story/#top",
-      "  https://real.example/story  ",
-    ]) {
-      const c = must({ t: "article", title: "x", url: u });
-      assert.equal(c.t, "article", `${u} should match the allow-list`);
-      assert.equal(c.url, u.trim(), "the original URL is preserved, only trimmed");
-    }
+  test("trims surrounding whitespace", () => {
+    assert.equal(must({ t: "article", title: "x", url: "  https://real.example/story  " }).url, "https://real.example/story");
   });
 
   test("ignores a non-string URL instead of throwing", () => {
@@ -102,26 +63,23 @@ describe("URL allow-list — the no-invented-links guarantee", () => {
       assert.ok(!("url" in c), `${JSON.stringify(url)} must not produce a link`);
     }
   });
-
-  test("an empty allow-list lets no URL through", () => {
-    const c = must({ t: "article", title: "x", url: "https://real.example/story" }, new Map());
-    assert.equal(c.t, "lead");
-    assert.ok(!("url" in c));
-  });
 });
 
 describe("sources", () => {
-  test("keeps only allow-listed sources, titled from the allow-list", () => {
+  test("keeps only usable sources, titled by the agent or after their host", () => {
     const c = must({
       t: "fact",
       title: "x",
-      sources: ["https://real.example/story", "https://invented.example/nope"],
+      sources: [{ url: "https://real.example/story", title: "A Real Story" }, "http://localhost/x", "https://www.other.example/y"],
     });
-    assert.deepEqual(c.sources, [{ url: "https://real.example/story", title: "A Real Story" }]);
+    assert.deepEqual(c.sources, [
+      { url: "https://real.example/story", title: "A Real Story" },
+      { url: "https://www.other.example/y", title: "other.example" },
+    ]);
   });
 
   test("omits the key entirely when nothing survives", () => {
-    const c = must({ t: "fact", title: "x", sources: ["https://invented.example/nope"] });
+    const c = must({ t: "fact", title: "x", sources: ["file:///etc/passwd"] });
     assert.ok(!("sources" in c), "an empty source list should be absent, not []");
   });
 
@@ -132,44 +90,27 @@ describe("sources", () => {
       url: "https://real.example/story",
       sources: ["https://real.example/story", "https://real.example/other"],
     });
-    assert.deepEqual(c.sources, [{ url: "https://real.example/other", title: "Another Story" }]);
+    assert.deepEqual(c.sources?.map((s) => s.url), ["https://real.example/other"]);
+  });
+
+  test("does not repeat the card's own URL in a different spelling", () => {
+    const c = must({
+      t: "article",
+      title: "x",
+      url: "https://real.example/story",
+      sources: ["https://real.example/story/", "https://real.example/story#top"],
+    });
+    assert.ok(!("sources" in c), "the same page should not be both the link and a source");
   });
 
   test("caps at two sources", () => {
-    const allowed = new Map<string, string>([
-      ["https://real.example/1", "One"],
-      ["https://real.example/2", "Two"],
-      ["https://real.example/3", "Three"],
-    ]);
-    const c = must(
-      { t: "fact", title: "x", sources: ["https://real.example/1", "https://real.example/2", "https://real.example/3"] },
-      allowed,
-    );
+    const c = must({ t: "fact", title: "x", sources: ["https://real.example/1", "https://real.example/2", "https://real.example/3"] });
     assert.equal(c.sources?.length, 2);
-  });
-
-  test("falls back to a generic title when the allow-list has no title", () => {
-    const c = must({ t: "fact", title: "x", sources: ["https://real.example/untitled"] },
-      new Map([["https://real.example/untitled", ""]]));
-    assert.deepEqual(c.sources, [{ url: "https://real.example/untitled", title: "Source" }]);
   });
 
   test("ignores a non-array sources field", () => {
     const c = must({ t: "fact", title: "x", sources: "https://real.example/story" });
     assert.ok(!("sources" in c));
-  });
-
-  // Known gap. The dedupe compares raw strings (`u !== url`) while the allow-list matches on
-  // normalised ones, so a trailing slash or fragment slips the same page past it and the card
-  // links to it twice. Fix is `normUrl(u) !== normUrl(url ?? "")`; flip this off when it lands.
-  test("does not repeat the card's own URL in a different spelling", { todo: "dedupe compares raw strings" }, () => {
-    const c = must({
-      t: "article",
-      title: "x",
-      url: "https://real.example/story",
-      sources: ["https://real.example/story/"],
-    });
-    assert.ok(!("sources" in c), "the same page should not be both the link and a source");
   });
 });
 
@@ -179,7 +120,7 @@ describe("search-query fallback", () => {
   });
 
   test("an article downgraded to a lead inherits the query fallback", () => {
-    const c = must({ t: "article", title: "Headline", url: "https://invented.example/nope" });
+    const c = must({ t: "article", title: "Headline", url: "javascript:alert(1)" });
     assert.equal(c.t, "lead");
     assert.equal(c.q, "Headline", "the downgraded card still needs a search query");
   });
@@ -283,9 +224,9 @@ describe("output shape", () => {
   });
 
   test("does not mutate the input object", () => {
-    const input = { t: "article", title: "x", url: "https://invented.example/nope" };
+    const input = { t: "article", title: "x", url: "javascript:alert(1)", sources: ["https://real.example/a"] };
     const snapshot = structuredClone(input);
-    sanitizeCard(input, ALLOWED());
+    sanitizeAgentCard(input);
     assert.deepEqual(input, snapshot);
   });
 });

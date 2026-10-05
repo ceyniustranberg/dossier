@@ -2,15 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { readNdjson } from "@/lib/ndjson";
-import { fileNo, type Action, type Card, type Dossier, type StreamEvent } from "@/lib/types";
-import { Board, type BoardHandle, type Ghost } from "./Board";
+import { fileNo, type Card, type Dossier } from "@/lib/types";
+import { Board } from "./Board";
 
 interface Props {
   initial: Dossier;
   rev: number;
   updatedAt: number;
-  /** The signed-in viewer owns this dossier: drags are saved and the card actions work. */
+  /** The signed-in viewer owns this dossier: drags are saved. Anyone else can rearrange their own view. */
   isOwner: boolean;
   /** The built-in example: read-only, never polled. */
   example?: boolean;
@@ -40,13 +39,10 @@ function merge(local: Dossier, server: Dossier, dirty: Map<string, Pos>): Dossie
 
 export function DossierView({ initial, rev: rev0, updatedAt: upd0, isOwner, example }: Props) {
   const [dossier, setDossier] = useState<Dossier>(initial);
-  const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ text: string; err?: boolean } | null>(null);
-  const [placing, setPlacing] = useState<Ghost | null>(null);
   const [live, setLive] = useState(!example && pollDelay(upd0) === 2_000);
   const [copied, setCopied] = useState(false);
 
-  const board = useRef<BoardHandle>(null), ctl = useRef<AbortController | null>(null);
   const current = useRef(dossier), rev = useRef(rev0), updatedAt = useRef(upd0);
   const dirty = useRef(new Map<string, Pos>()), saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { current.current = dossier; });
@@ -104,66 +100,6 @@ export function DossierView({ initial, rev: rev0, updatedAt: upd0, isOwner, exam
     setDossier(next);
   }, [isOwner, example, flush]);
 
-  // ---- card actions (owner) -----------------------------------------------------------
-  async function dig(id: string, at: Pos) {
-    const parent = current.current.cards.find((c) => c.id === id);
-    if (!parent) return;
-    setPlacing({ ...at, label: "Digging deeper…", from: id });
-    setBusy(`Digging into “${parent.title ?? "card"}”…`);
-    ctl.current = new AbortController();
-    let n = 0, error: string | null = null;
-    try {
-      const res = await fetch("/api/dig", {
-        method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.current.signal,
-        body: JSON.stringify({ dossier_id: initial.id, card_id: id, at }),
-      });
-      if (!res.ok) error = (await res.json().catch(() => null))?.error || "The server returned an error.";
-      else for await (const ev of readNdjson<StreamEvent>(res)) {
-        if (ev.e === "status") setBusy(ev.text);
-        else if (ev.e === "error") error = ev.message;
-        else if (ev.e === "card") {
-          n++; setPlacing(null);
-          // Already saved by the server; show it now rather than on the next poll.
-          const card = { ...ev.card, ax: at.x, ay: at.y, x: at.x, y: at.y } as Card;
-          setDossier((d) => d.cards.some((c) => c.id === card.id) ? d : { ...d, cards: [...d.cards, card] });
-        }
-      }
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") error = "The connection dropped. Anything already filed is kept.";
-    }
-    setBusy(null); setPlacing(null);
-    if (error) say(error, true); else if (!n && !ctl.current.signal.aborted) say("Nothing new came back for that card. Try another one.");
-  }
-
-  async function findImages(id: string, at: Pos) {
-    const parent = current.current.cards.find((c) => c.id === id);
-    if (!parent) return;
-    setPlacing({ ...at, label: "Finding images…", from: id });
-    setBusy(`Finding images of “${parent.title ?? "card"}”…`);
-    ctl.current = new AbortController();
-    try {
-      const res = await fetch("/api/images", {
-        method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.current.signal,
-        body: JSON.stringify({ dossier_id: initial.id, card_id: id, at }),
-      });
-      const r = (await res.json().catch(() => ({}))) as { card?: Card | null; error?: string };
-      if (!res.ok) say(r.error || "The server returned an error.", true);
-      else if (!r.card) say("The search didn’t turn up any usable images for that card.");
-      else { const card = r.card; setDossier((d) => d.cards.some((c) => c.id === card.id) ? d : { ...d, cards: [...d.cards, card] }); }
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") say("Couldn’t reach the server. Try again in a moment.", true);
-    }
-    setBusy(null); setPlacing(null);
-  }
-
-  const act = (kind: Action, id: string, at?: Pos) => {
-    if (busy || !isOwner || example || !board.current) return;
-    setNote(null);
-    // A click has no drop spot: pick a free one now, so the server can save where the branch starts.
-    const spot = at ?? board.current.freeSpot(id);
-    void (kind === "dig" ? dig(id, spot) : findImages(id, spot));
-  };
-
   const copyLink = async () => {
     try { await navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked */ }
   };
@@ -179,13 +115,11 @@ export function DossierView({ initial, rev: rev0, updatedAt: upd0, isOwner, exam
         {!example && <button className="btn" type="button" onClick={copyLink}>{copied ? "Copied" : "Copy link"}</button>}
       </div>
       <main>
-        <Board ref={board} dossier={dossier} canDig={isOwner && !example && !busy} readOnly={!isOwner || !!example}
-          bottomPad={0} pending={placing} onChange={onBoardChange} onAct={act} />
+        <Board dossier={dossier} bottomPad={0} onChange={onBoardChange} />
         {empty && <div className="waiting"><span className="pulse" />Waiting for your agent to file the first cards…</div>}
-        {(busy || note) && (
-          <div className={`toast${note?.err && !busy ? " err" : ""}`} role="status">
-            {busy ? <><i className="pulse" /><span>{busy}</span><button type="button" onClick={() => ctl.current?.abort()}>Stop</button></>
-              : <><span>{note!.text}</span><button type="button" onClick={() => setNote(null)} aria-label="Dismiss">×</button></>}
+        {note && (
+          <div className={`toast${note.err ? " err" : ""}`} role="status">
+            <span>{note.text}</span><button type="button" onClick={() => setNote(null)} aria-label="Dismiss">×</button>
           </div>
         )}
       </main>

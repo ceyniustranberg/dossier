@@ -7,9 +7,6 @@ export interface Source { title: string; url: string }
 /** An image found on a real web page: `src` is the page's own preview image, `page` is where it came from. */
 export interface FoundImage { src: string; page: string; title: string; alt?: string }
 
-/** What a card's action buttons do. Each can be clicked, or dragged to choose where the result lands. */
-export type Action = "dig" | "images";
-
 export interface Card {
   id: string;
   t: CardType;
@@ -19,7 +16,7 @@ export interface Card {
   y: number;
   /** true once the user has dragged the card; auto-layout then leaves it alone */
   moved?: boolean;
-  /** set on "dig deeper" cards: the card they branch from, and where the branch column starts */
+  /** set on "dig deeper" cards: the card they branch from, and (if one was saved) where the branch column starts */
   parent?: string;
   ax?: number;
   ay?: number;
@@ -39,7 +36,7 @@ export interface Card {
   bars?: { label: string; value: number }[];
   /** search query for lead / picture cards */
   q?: string;
-  /** article cards: a real URL returned by web search */
+  /** article cards: the URL of the page the agent read */
   url?: string;
   outlet?: string;
   date?: string;
@@ -66,15 +63,6 @@ export interface Dossier {
 
 export type Size = { w: number; h: number };
 export type Sizes = Record<string, Size>;
-
-/** Events streamed from /api/research and /api/dig as NDJSON. */
-export type StreamEvent =
-  | { e: "status"; text: string }
-  | { e: "plan"; title: string; angle: string; clusters: string[] }
-  | { e: "summary"; body: string; takeaways: string[] }
-  | { e: "card"; card: Omit<Card, "x" | "y"> }
-  | { e: "error"; message: string }
-  | { e: "done"; searches: number };
 
 export const CARD_LABELS: Record<Exclude<CardType, "summary">, string> = {
   fact: "Finding", stat: "Figure", timeline: "Timeline", player: "Player", article: "Article",
